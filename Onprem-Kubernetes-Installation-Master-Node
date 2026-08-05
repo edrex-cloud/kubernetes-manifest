@@ -122,19 +122,20 @@ Troubleshooting the Public ip cert issue with managed onprem master node cluster
 `
 apiServer:
   certSANs:
-  - "172.31.22.194"
+  - "YOUR_PRIVATE_IP"
   - "YOUR_PUBLIC_IP"
-`
+
 
 3) remove the old cert what is linked to only the private ip
 sudo mv /etc/kubernetes/pki/apiserver.crt /etc/kubernetes/pki/apiserver.crt.old
 sudo mv /etc/kubernetes/pki/apiserver.key /etc/kubernetes/pki/apiserver.key.old
 
-4) # Generate the new ones using your updated config file
+4) delete the old .kube/config
+    rm -rf .kube/config
+
+5) # Generate the new ones using your updated config file
 sudo kubeadm init phase certs apiserver --config kubeadm-config.yaml
 
-5) delete the old .kube/config
-    rm -rf .kube/config
 
 6) Regenerate a new config  
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
