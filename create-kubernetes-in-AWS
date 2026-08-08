@@ -1,8 +1,8 @@
 # how to apply 
-# install awscli and eksctl
-# login using aws configure command 
-aws configure 
-add access-key and secret-access-key
+1. install awscli and eksctl
+2. login using aws configure command 
+- aws configure 
+- add access-key and secret-access-key
 
 #then copy and pest this file below in a file and run this comand 
 1 Create command 
@@ -26,7 +26,7 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: smart-prod-cluster
+  name: drex-prod-cluster
   region: us-east-1
   version: "1.34" 
 
