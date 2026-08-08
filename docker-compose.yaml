@@ -25,5 +25,3 @@ services:
 networks:
   dev-net:
     driver: bridge
-
-    	  
