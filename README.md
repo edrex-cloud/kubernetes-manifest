@@ -10,7 +10,7 @@ A manual, production-style 3-node Kubernetes cluster deployed on AWS EC2 instanc
 
 ```text
 ┌─────────────────────────────────────────────────────┐
-│                   AWS EC2 (Ubuntu 24.04)            │
+│                   AWS EC2 (Ubuntu 26.04)            │
 │                                                     │
 │  ┌─────────────────────┐                            │
 │  │ master-node-cluster │  Control Plane             │
@@ -32,24 +32,24 @@ A manual, production-style 3-node Kubernetes cluster deployed on AWS EC2 instanc
 CNI: Cilium v1.19.3
 Container Runtime: containerd (Docker Engine)
 Kubernetes Version: v1.34.9
-Pod Network CIDR: 192.168.0.0/16
+Pod Network CIDR: 10.0.0.0/8
 ```
 
 
 ## Stack
 
-* **Cloud:** AWS EC2 (Ubuntu 24.04 LTS)
+* **Cloud:** AWS EC2 (Ubuntu 26.04 LTS)
 * **Kubernetes:** v1.34.9 via kubeadm
 * **Container Runtime:** containerd (bundled with Docker Engine)
 * **CNI:** Cilium v1.19.3
-* **Cluster Management UI:** Freelens (OpenLens successor)
+* **Cluster Management UI:** **Openlens**
 
 ---
 
 
 ## Prerequisites
 
-* **3 AWS EC2 instances** (Ubuntu 24.04), minimum t2.medium for master
+* **3 AWS EC2 instances** (Ubuntu 26.04), minimum t3a.medium for master
 * **Security group inbound rules:**
   * Port 22 (SSH) from your IP
   * Port 6443 (Kubernetes API server) between all nodes
@@ -148,9 +148,9 @@ sudo apt-mark hold kubelet kubeadm kubectl
 
 ### 1. Initialize the control plane
  ```bash
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+sudo kubeadm init --pod-network-cidr= 10.0.0.0/8
 ```
-> 💡 **Note:** Choose a pod CIDR that does not overlap with your VPC CIDR. This cluster used `192.168.0.0/16` to avoid conflict with the VPC's `10.0.0.0/16` range.
+> 💡 **Note:** Choose a pod CIDR that does not overlap with your VPC CIDR. This cluster used `10.0.0.0/8` to avoid conflict with the VPC's `192.168.0.0/16` range.
 
 ### 2. Set up Kubeconfig
 ```bash
@@ -191,7 +191,7 @@ kubectl get pods -A
 cilium status
 kubectl cluster-info
 ```
-## Expected output: all 3 nodes in Ready state, all kube-system pods Running. ✅
+## Expected output: all 3 nodes in Ready state, all kube-system pods Running✅
 
 ---
 
@@ -206,7 +206,7 @@ Cause: Security group on the master node was not allowing inbound TCP port 6443 
 Fix: Add inbound rule to the master's security group allowing TCP 6443 from the VPC CIDR (or worker node IPs). Retry the `kubeadm join` command
 
 ### Issue 2: Apiserver TLS certificate does not include public IP (Openlens/remote kubectl connection fails)
-Symptom: Connecting to the cluster from a remote machine (Freelens/kubectl) fails with a TLS certificate error because the cert was only signed for the private IP, not the public IP.
+Symptom: Connecting to the cluster from a remote machine (Openlens/kubectl) fails with a TLS certificate error because the cert was only signed for the private IP, not the public IP.
 
 Fix: Regenerate the apiserver certificate with the public IP as a SAN
 
@@ -214,11 +214,11 @@ Step 1: Export the current cluster config:
 ```bash
 kubectl -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' > kubeadm-config.yaml
 ```
-Step 2: Edit kubeadm-config.yaml and add the public IP under certSANs:
+Step 2: Edit kubeadm-config.yaml and add the IPs under certSANs:
 ```bash
 apiServer:
   certSANs:
-  - "172.31.22.194"
+  - "YOUR_PRIVATE_IP"
   - "YOUR_PUBLIC_IP"
 ```
 Step 3: Back up and remove the old cert:
@@ -239,9 +239,9 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 Step 6: Copy the contents of `cat $HOME/.kube/config` into Openlens when adding the cluster.
 
 ### Issue 3: All nodes disappear after accidental deletion via Openlens
-Symptom: kubectl get nodes returns No resources found after nodes were deleted from the Freelens UI. Kubelet logs show repeated "Error updating node status" errors.
+Symptom: kubectl get nodes returns No resources found after nodes were deleted from the Openlens UI. Kubelet logs show repeated "Error updating node status" errors.
 
-Cause: Deleting a node object in Freelens removes the Node resource from etcd. Kubelet keeps running but cannot re-register the node on its own without a restart.
+Cause: Deleting a node object in Openlens removes the Node resource from etcd. Kubelet keeps running but cannot re-register the node on its own without a restart.
 
 Fix: Restart kubelet on each affected node, starting with the master:
 ```bash
@@ -254,11 +254,11 @@ Repeat on each worker. Nodes self-register within 15 to 30 seconds. After recove
 ```bash
 kubectl label node master-node-cluster node-role.kubernetes.io/control-plane=
 ```
-> 💡 **Lesson learned:** Openlens node deletion is destructive. Use it for observation, not for managing node lifecycle.
+> 💡 **Lesson learned:** Deleting a node object in OpenLens deregisters it from the Kubernetes control plane without terminating the underlying compute instance. Use GUI dashboards primarily for monitoring and observation, not for managing node lifecycles.
 ---
 ## Key Learnings
 
-* containerd requires explicit systemd cgroup configuration to work with kubelet. Docker's bundled containerd ships with the wrong default.
+* Containerd requires explicit systemd cgroup configuration to work with kubelet. Docker's bundled containerd ships with the wrong default.
 * kubeadm-generated TLS certs only include IPs known at init time. Any remote access via a public IP requires cert regeneration with updated SANs.
 * Deleting a Kubernetes Node object does not stop the kubelet process on that node. A kubelet restart triggers re-registration without needing to re-run kubeadm join.
 * Pod CIDR selection matters. Overlapping with your VPC or node subnet CIDR will silently break pod networking.
